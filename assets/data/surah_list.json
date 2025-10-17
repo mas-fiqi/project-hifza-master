@@ -1,0 +1,12 @@
+[
+  { "nomor": 1, "nama": "Al-Fatihah", "ayat": 7 },
+  { "nomor": 2, "nama": "Al-Baqarah", "ayat": 286 },
+  { "nomor": 3, "nama": "Ali Imran", "ayat": 200 },
+  { "nomor": 4, "nama": "An-Nisa", "ayat": 176 },
+  { "nomor": 5, "nama": "Al-Maidah", "ayat": 120 },
+  { "nomor": 6, "nama": "Al-An’am", "ayat": 165 },
+  { "nomor": 7, "nama": "Al-A’raf", "ayat": 206 },
+  { "nomor": 8, "nama": "Al-Anfal", "ayat": 75 },
+  { "nomor": 9, "nama": "At-Taubah", "ayat": 129 },
+  { "nomor": 10, "nama": "Yunus", "ayat": 109 }
+]

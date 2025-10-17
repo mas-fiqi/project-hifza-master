@@ -1,4 +1,6 @@
+# ================================
 # Nama proyek dan deskripsi
+# ================================
 name: hifzh_master
 description: Aplikasi gamifikasi hafalan Al-Qur'an berbasis Flutter
 
@@ -8,102 +10,98 @@ publish_to: 'none'
 # Versi aplikasi
 version: 1.0.0+1
 
-# Versi SDK Flutter yang digunakan
-# Diperbarui agar sesuai dengan Flutter 3.35.3 (Dart 3.9.x)
+# ================================
+# Versi SDK Flutter dan Dart
+# ================================
+# Menentukan versi Dart/Flutter minimal & maksimal yang bisa menjalankan proyek
 environment:
   sdk: ">=3.9.0 <4.0.0"
 
-# -----------------------------------
+# ================================
 # Dependency utama aplikasi
-# -----------------------------------
+# ================================
 dependencies:
   flutter:
     sdk: flutter
 
-  # Ikon bergaya iOS (UI bawaan Apple)
+  # Ikon gaya iOS (misalnya ikon default seperti CupertinoActivityIndicator)
   cupertino_icons: ^1.0.8
 
-  # Manajemen state (mengatur data agar sinkron antar-widget)
+  # Provider → manajemen state agar data antar-screen saling sinkron
   provider: ^6.1.2
 
-  # Database lokal (Hive) — untuk menyimpan progres hafalan atau data user
+  # Hive → database lokal untuk menyimpan data hafalan, user progress, dll.
   hive: ^2.2.3
   hive_flutter: ^1.1.0
 
-  # Mengatur lokasi penyimpanan file (misalnya audio hafalan disimpan di lokal)
-  # Diperbarui dari ^2.1.2 → ^2.1.3 agar kompatibel dengan Flutter versi baru
+  # Path provider → membantu menyimpan file/audio ke penyimpanan lokal
   path_provider: ^2.1.3
 
-  # Pemutar audio — untuk memutar murattal atau rekaman hafalan
+  # Audio player → untuk memutar suara murattal
   audioplayers: ^6.0.0
 
-  # Fitur pengenalan suara (speech-to-text)
-  # Diperbarui dari ^6.6.2 → ^7.3.0 agar mendukung Flutter 3.35.3
+  # Speech-to-Text → agar aplikasi bisa mengenali suara pengguna (mic → teks)
   speech_to_text: ^7.3.0
 
-  # Fitur text-to-speech (TTS) — aplikasi membaca teks secara suara
-  # Diperbarui dari ^3.8.5 → ^4.0.2 untuk dukungan terbaru
+  # Text-to-Speech → agar aplikasi bisa membaca teks secara suara (TTS)
   flutter_tts: ^4.0.2
 
-  # Permission handler — untuk meminta izin mikrofon/audio
-  # (baru ditambahkan karena versi baru speech_to_text & TTS memerlukan izin runtime)
+  # Permission handler → meminta izin mic/audio/storage dari pengguna
   permission_handler: ^11.3.0
 
 
-# -----------------------------------
-# Dependency untuk pengujian & linting (kode rapi & standar)
-# -----------------------------------
+# ================================
+# Dependency tambahan untuk testing dan linting
+# ================================
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
-  # Diperbarui dari ^3.0.2 → ^5.0.0 agar sesuai dengan Dart 3.9.x
+  # Flutter Lints → aturan gaya kode yang lebih modern dan sesuai standar Dart 3
   flutter_lints: ^5.0.0
 
 
-# -----------------------------------
+# ================================
 # Konfigurasi Flutter
-# -----------------------------------
+# ================================
 flutter:
   uses-material-design: true  # Mengaktifkan ikon Material Design bawaan Flutter
 
-  # -----------------------------------
+  # ============================
   # Daftar aset yang digunakan
-  # -----------------------------------
+  # ============================
   assets:
-    # Folder berisi audio (contoh: Surah Al-Kahf.mp3)
+    # Folder audio (misal: mp3 murattal, suara hafalan)
     - assets/audio/
 
-    # Folder untuk gambar dan ikon (UI, ilustrasi, dll)
+    # Folder untuk gambar UI dan ilustrasi
     - assets/images/
 
-    # Folder data tambahan (misalnya JSON, teks, dll)
+    # Folder data tambahan (misal: JSON daftar surah)
     - assets/data/
 
-    # Folder tambahan opsional (contoh folder baru: Phone)
-    # Tidak wajib diisi file langsung, tapi bisa dibuat dulu untuk persiapan
+    # Folder font (mushaf / teks Arab)
     - assets/fonts/
 
 
-  # -----------------------------------
-  # Daftar font yang digunakan di aplikasi
-  # -----------------------------------
+  # ============================
+  # Daftar font (custom)
+  # ============================
   fonts:
     # Font utama (Amiri)
-    # Digunakan untuk teks Arab atau tampilan ayat Al-Qur'an yang elegan
     - family: Amiri
       fonts:
-        - asset: assets/fonts/Amiri-Regular.ttf      # Gaya biasa
-        - asset: assets/fonts/Amiri-Bold.ttf         # Gaya tebal
+        - asset: assets/fonts/Amiri-Regular.ttf
+        - asset: assets/fonts/Amiri-Bold.ttf
           weight: 700
-        - asset: assets/fonts/Amiri-Italic.ttf       # Gaya miring
+        - asset: assets/fonts/Amiri-Italic.ttf
           style: italic
-        - asset: assets/fonts/Amiri-BoldItalic.ttf   # Gaya tebal miring
+        - asset: assets/fonts/Amiri-BoldItalic.ttf
           weight: 700
           style: italic
 
-    # Font khusus untuk teks Al-Qur'an (lebih kaligrafis dan autentik)
+    # Font khusus mushaf Al-Qur’an
     - family: AmiriQuran
       fonts:
-        - asset: assets/fonts/AmiriQuran.ttf         # Font utama mushaf
-        - asset: assets/fonts/AmiriQuranColored.ttf  # Font mushaf berwarna (tajwid)
+        - asset: assets/fonts/AmiriQuran.ttf
+        - asset: assets/fonts/AmiriQuranColored.ttf

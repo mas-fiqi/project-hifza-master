@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:hifzh_master/screens/home/home_screen.dart'; // pastikan import ke HomeScreen
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -11,14 +12,14 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    _moveToHome();
-  }
 
-  Future<void> _moveToHome() async {
-    await Future.delayed(const Duration(seconds: 2)); // durasi splash
-    if (mounted) {
-      Navigator.pushReplacementNamed(context, '/home');
-    }
+    // Tunggu 2 detik lalu pindah ke Home
+    Future.delayed(const Duration(seconds: 2), () {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const HomeScreen()),
+      );
+    });
   }
 
   @override
@@ -29,9 +30,9 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Text(
           'Hifzh Master',
           style: TextStyle(
-            fontSize: 28,
-            fontWeight: FontWeight.bold,
+            fontSize: 24,
             color: Colors.white,
+            fontWeight: FontWeight.bold,
           ),
         ),
       ),
