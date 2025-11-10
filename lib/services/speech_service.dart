@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart'; // diperlukan untuk debugPrint
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 
 class SpeechService {
@@ -6,7 +7,9 @@ class SpeechService {
   Future<void> startListening() async {
     await _speech.initialize();
     await _speech.listen(onResult: (result) {
-      print('Hasil: ${result.recognizedWords}');
+      // ambil teks dari result
+      final recognizedText = result.recognizedWords;
+      debugPrint('Speech recognized: $recognizedText');
     });
   }
 

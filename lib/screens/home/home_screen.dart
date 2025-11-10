@@ -1,31 +1,15 @@
-// ================================
-// 🕌 File: home_screen.dart
-// ================================
-// Fungsi: Menampilkan tampilan utama aplikasi “The Hafiz”
-// di mana pengguna bisa memilih menu seperti:
-// - Uji hafalan tulisan
-// - Uji hafalan suara
-// - Skor hafalan
-// - Skor sambung ayat
-//
-// Semua menu ditampilkan dalam bentuk kartu interaktif.
-// ================================
-
+// lib/screens/home/home_screen.dart
+// Versi layout baru: hero + overlapping search + grid menu + rekomendasi
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 
-// 🔹 Import service yang dibutuhkan
-// AudioService = menangani audio/murottal
-// SpeechService = menangani pengenalan suara (speech-to-text)
-import '../../services/audio_service.dart';
-import '../../services/speech_service.dart';
+// package imports
+import 'package:hifzh_master/screens/search/search_overlay_screen.dart';
+import 'package:hifzh_master/screens/quran/quran_list_screen.dart';
+import 'package:hifzh_master/screens/uji/uji_suara_screen.dart';
+import 'package:hifzh_master/screens/skor/skor_hafalan_screen.dart';
+import 'package:hifzh_master/screens/skor/skor_sambung_ayat_screen.dart';
 
-// 🔹 Import widget tambahan (misalnya search bar di halaman utama)
-import 'widgets/search_bar.dart';
-
-// ================================
-// Kelas utama HomeScreen
-// ================================
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -33,296 +17,542 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-// ================================
-// State HomeScreen
-// Di sinilah logika dan UI utama dibuat
-// ================================
 class _HomeScreenState extends State<HomeScreen> {
-  // Variabel untuk menyimpan kata pencarian dari SearchBar
   String searchQuery = '';
+
+  final Map<String, Map<String, dynamic>> _featureMeta = {
+    '/uji_suara': {
+      'label': 'Uji Suara',
+      'subtitle': 'Latihan membaca ayat',
+      'color': Colors.blueAccent,
+    },
+    '/quran_list': {
+      'label': 'Kitab Suci',
+      'subtitle': 'Buka Al-Qur\'an',
+      'color': Colors.orangeAccent,
+    },
+    '/skor_hafalan': {
+      'label': 'Skor Hafalan',
+      'subtitle': 'Progres hafalan',
+      'color': Colors.green,
+    },
+    '/skor_sambung_ayat': {
+      'label': 'Sambung Ayat',
+      'subtitle': 'Nilai sambung ayat',
+      'color': Colors.purpleAccent,
+    },
+  };
+
+  List<String> _recommendationOrder = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRecommendationOrder();
+  }
+
+  Future<void> _loadRecommendationOrder() async {
+    try {
+      if (Hive.isBoxOpen('user_visits')) {
+        final box = Hive.box('user_visits');
+        final Map<String, int> counts = {};
+        for (var key in box.keys) {
+          final val = box.get(key);
+          if (val is int) counts[key.toString()] = val;
+        }
+        final ordered = _featureMeta.keys.toList();
+        ordered.sort((a, b) {
+          final ai = counts[a] ?? 0;
+          final bi = counts[b] ?? 0;
+          return bi.compareTo(ai);
+        });
+        setState(() => _recommendationOrder = ordered);
+        return;
+      }
+    } catch (e) {
+      debugPrint('Gagal baca user_visits: $e');
+    }
+
+    setState(() => _recommendationOrder = [
+          '/uji_suara',
+          '/quran_list',
+          '/skor_hafalan',
+          '/skor_sambung_ayat'
+        ]);
+  }
+
+  Future<void> _incrementVisit(String route) async {
+    try {
+      if (!Hive.isBoxOpen('user_visits')) return;
+      final box = Hive.box('user_visits');
+      final cur = box.get(route) as int? ?? 0;
+      await box.put(route, cur + 1);
+      _loadRecommendationOrder();
+    } catch (e) {
+      debugPrint('Gagal simpan visit: $e');
+    }
+  }
+
+  Color _shadowFromColor(Color c, [int alpha = 25]) =>
+      Color.fromARGB(alpha, c.red, c.green, c.blue);
 
   @override
   Widget build(BuildContext context) {
-    // 🔹 Ambil service audio dan speech menggunakan Provider
-    // agar bisa digunakan di seluruh aplikasi tanpa harus passing data manual.
-    final audio = Provider.of<AudioService>(context, listen: false);
-    final speech = Provider.of<SpeechService>(context, listen: false);
-
-    // ================================
-    // 🔹 Scaffold = kerangka utama tampilan
-    // ================================
     return Scaffold(
-      backgroundColor: Colors.grey[100], // warna latar belakang
-      appBar: AppBar(
-        automaticallyImplyLeading: false, // hilangkan tombol back otomatis
-        backgroundColor: Colors.teal, // warna utama header
-        elevation: 0, // tanpa bayangan
-        title: const Text(
-          'The Hafiz',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        centerTitle: true, // judul di tengah
-      ),
-
-      // ================================
-      // 🔹 Body utama aplikasi (bisa digulir)
-      // ================================
-      body: SingleChildScrollView(
+      backgroundColor: const Color(0xFFF7FAFF),
+      body: SafeArea(
         child: Column(
           children: [
-            // ========================================
-            // 🔹 Bagian Header (sambutan pengguna)
-            // ========================================
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [Colors.teal, Colors.lightBlueAccent],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.only(
-                  bottomLeft: Radius.circular(32),
-                  bottomRight: Radius.circular(32),
-                ),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text(
-                    'Selamat Datang, Belga 👋',
-                    style: TextStyle(
-                      fontSize: 20,
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  SizedBox(height: 6),
-                  Text(
-                    'Tetap semangat menjaga hafalanmu hari ini!',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.white70,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // ========================================
-            // 🔹 Bagian “Terakhir Dibaca”
-            // ========================================
-            Container(
-              padding: const EdgeInsets.all(16),
-              alignment: Alignment.centerLeft,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: const [
-                  Text(
-                    'Terakhir dibaca',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.black54,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  Text(
-                    'Surah Al-Fatihah ayat 1',
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: Colors.black87,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // ========================================
-            // 🔹 Search Bar (pencarian surat)
-            // ========================================
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: SearchBarWidget(
-                onChanged: (query) {
-                  // setiap kali teks berubah, update variabel searchQuery
-                  setState(() {
-                    searchQuery = query;
-                  });
-                },
-              ),
-            ),
-
-            const SizedBox(height: 8),
-
-            // ========================================
-            // 🔹 MENU 1 — Uji Hafalan (pindah ke atas)
-            // ========================================
-            _buildMenuSection(
-              title: 'Uji Hafalan',
+            // ===== HERO HEADER =====
+            Stack(
+              clipBehavior: Clip.none,
               children: [
-                _buildMenuCard(
-                  icon: Icons.edit_note,
-                  title: "Uji Hafalan Dengan Tulisan",
-                  subtitle: 'Perkuat hafalan dengan latihan soal tulisan',
-                  color: Colors.orangeAccent,
-                  onTap: () {
-                    Navigator.pushNamed(context, '/uji_tulisan');
-                  },
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Color(0xFF0D9488), Color(0xFF60A5FA)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.only(
+                      bottomLeft: Radius.circular(28),
+                      bottomRight: Radius.circular(28),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 28,
+                            backgroundColor: Colors.white.withOpacity(0.15),
+                            child: const Icon(Icons.person,
+                                size: 30, color: Colors.white),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: const [
+                                Text('Selamat Datang Belga 👋',
+                                    style: TextStyle(
+                                        fontSize: 18,
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w700)),
+                                SizedBox(height: 4),
+                                Text('Terus jaga hafalanmu hari ini',
+                                    style: TextStyle(
+                                        fontSize: 13, color: Colors.white70)),
+                              ],
+                            ),
+                          ),
+                          IconButton(
+                            onPressed: () {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                      content: Text(
+                                          'Buka profil (implementasi nanti)')));
+                            },
+                            icon: const Icon(Icons.settings,
+                                color: Colors.white),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      Row(
+                        children: [
+                          _SmallInfoBox(
+                              label: 'Terakhir dibaca',
+                              value: 'Al-Fatihah • 1',
+                              icon: Icons.menu_book),
+                          const SizedBox(width: 10),
+                          _SmallInfoBox(
+                              label: 'Progress hari ini',
+                              value: '2/4 sesi',
+                              icon: Icons.timeline),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
-                _buildMenuCard(
-                  icon: Icons.mic,
-                  title: "Uji Hafalan Dengan Suara",
-                  subtitle: 'Uji hafalan dengan membaca ayat menggunakan suara',
-                  color: Colors.blueAccent,
-                  onTap: () {
-                    Navigator.pushNamed(context, '/uji_suara');
-                  },
+                Positioned(
+                  left: 16,
+                  right: 16,
+                  bottom: -28,
+                  child: GestureDetector(
+                    onTap: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const SearchOverlayScreen())),
+                    child: Material(
+                      elevation: 6,
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        height: 56,
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(14)),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.search, color: Colors.black54),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text('Cari Surah atau Ayat...',
+                                  style: TextStyle(color: Colors.grey[600])),
+                            ),
+                            IconButton(
+                              onPressed: () => Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) =>
+                                          const SearchOverlayScreen())),
+                              icon: const Icon(Icons.arrow_forward_ios,
+                                  size: 16, color: Colors.grey),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
                 ),
               ],
             ),
+            const SizedBox(height: 40),
 
-            // ========================================
-            // 🔹 MENU 2 — Skor Hafalan (pindah ke bawah)
-            // ========================================
-            _buildMenuSection(
-              title: 'Skor Hafalan',
-              children: [
-                _buildMenuCard(
-                  icon: Icons.assessment,
-                  title: "Skor Hafalan",
-                  subtitle: 'Lihat pencapaian hafalan dan progres kamu',
-                  color: Colors.green,
-                  onTap: () {
-                    Navigator.pushNamed(context, '/skor_hafalan');
-                  },
-                ),
-                _buildMenuCard(
-                  icon: Icons.stacked_line_chart,
-                  title: "Skor Sambung Ayat",
-                  subtitle: 'Nilai hasil sambung ayat dari hafalanmu',
-                  color: Colors.purpleAccent,
-                  onTap: () {
-                    Navigator.pushNamed(context, '/skor_sambung_ayat');
-                  },
-                ),
-              ],
-            ),
+            // ===== BODY =====
+            Expanded(
+              child: SingleChildScrollView(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                physics: const BouncingScrollPhysics(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Pilih Latihan',
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 16)),
+                    const SizedBox(height: 12),
+                    LayoutBuilder(builder: (context, constraints) {
+                      final itemWidth = (constraints.maxWidth - 12) / 2;
+                      return Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: [
+                          _FeatureTile(
+                            width: itemWidth,
+                            icon: Icons.mic,
+                            title: 'Tes bacaan',
+                            subtitle: 'Tingkatkan bacaan Al-Qur’an',
+                            color: Colors.blueAccent,
+                            onTap: () {
+                              _incrementVisit('/uji_suara');
+                              Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) => const UjiSuaraScreen()));
+                            },
+                            shadow: _shadowFromColor(Colors.blueAccent, 26),
+                          ),
+                          _FeatureTile(
+                            width: itemWidth,
+                            icon: Icons.menu_book,
+                            title: 'Kitab Suci',
+                            subtitle: 'Mari mampir dulu geratis kawanqu',
+                            color: Colors.orangeAccent,
+                            onTap: () {
+                              _incrementVisit('/quran_list');
+                              Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) =>
+                                          const QuranListScreen()));
+                            },
+                            shadow: _shadowFromColor(Colors.orangeAccent, 26),
+                          ),
+                          _FeatureTile(
+                            width: itemWidth,
+                            icon: Icons.assessment,
+                            title: 'Poin tes bacaan',
+                            subtitle: 'Hasil usaha',
+                            color: Colors.green,
+                            onTap: () {
+                              _incrementVisit('/skor_hafalan');
+                              Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) => SkorHafalanScreen()));
+                            },
+                            shadow: _shadowFromColor(Colors.green, 26),
+                          ),
+                          _FeatureTile(
+                            width: itemWidth,
+                            icon: Icons.stacked_line_chart,
+                            title: 'Poin tes tulis',
+                            subtitle: 'Hasil latihan',
+                            color: Colors.purpleAccent,
+                            onTap: () {
+                              _incrementVisit('/skor_sambung_ayat');
+                              Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) =>
+                                          SkorSambungAyatScreen()));
+                            },
+                            shadow: _shadowFromColor(Colors.purpleAccent, 26),
+                          ),
+                        ],
+                      );
+                    }),
 
-            // ========================================
-            // 🔹 Bagian “Tentang Aplikasi”
-            // ========================================
-            const SizedBox(height: 16),
-            const Text(
-              'Tentang Aplikasi',
-              style: TextStyle(
-                color: Colors.teal,
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Sering Dikunjungi',
+                            style: TextStyle(
+                                fontSize: 16, fontWeight: FontWeight.bold)),
+                        TextButton(
+                          onPressed: () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                    content: Text(
+                                        'Lihat semua (implementasi nanti)')));
+                          },
+                          child: const Text('Lihat Semua'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      height: 120,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _recommendationOrder.length,
+                        separatorBuilder: (_, __) =>
+                            const SizedBox(width: 12),
+                        itemBuilder: (context, index) {
+                          final route = _recommendationOrder[index];
+                          final meta = _featureMeta[route]!;
+                          final Color c = meta['color'] as Color;
+                          return _RecommendationCard(
+                            label: meta['label'] as String,
+                            subtitle: meta['subtitle'] as String,
+                            color: c,
+                            onTap: () {
+                              _incrementVisit(route);
+                              if (route == '/uji_suara') {
+                                Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                        builder: (_) =>
+                                            const UjiSuaraScreen()));
+                              } else if (route == '/quran_list') {
+                                Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                        builder: (_) =>
+                                            const QuranListScreen()));
+                              } else if (route == '/skor_hafalan') {
+                                Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                        builder: (_) =>
+                                            SkorHafalanScreen()));
+                              } else if (route == '/skor_sambung_ayat') {
+                                Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                        builder: (_) =>
+                                            SkorSambungAyatScreen()));
+                              }
+                            },
+                          );
+                        },
+                      ),
+                    ),
+
+                    const SizedBox(height: 24),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                              color: Colors.black12,
+                              blurRadius: 8,
+                              offset: const Offset(0, 4))
+                        ],
+                      ),
+                      child: const Text(
+                        'Tip: Coba latihan 10 menit setiap hari untuk meningkatkan konsistensi hafalan.',
+                        style: TextStyle(color: Colors.black87),
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 30),
           ],
         ),
       ),
     );
   }
+}
 
-  // ==================================================
-  // 🔹 Widget Helper untuk membuat Section Menu
-  // ==================================================
-  Widget _buildMenuSection({
-    required String title,
-    required List<Widget> children,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Judul section
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 16,
-              color: Colors.black54,
-              fontWeight: FontWeight.bold,
+class _SmallInfoBox extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  const _SmallInfoBox(
+      {required this.label, required this.value, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.12),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+                radius: 18,
+                backgroundColor: Colors.white.withOpacity(0.14),
+                child: Icon(icon, color: Colors.white, size: 18)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label,
+                        style:
+                            const TextStyle(color: Colors.white70, fontSize: 11)),
+                    const SizedBox(height: 2),
+                    Text(value,
+                        style: const TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.w700)),
+                  ]),
             ),
-          ),
-          const SizedBox(height: 8),
-
-          // Tambahkan semua kartu (children) di section ini
-          ...children,
-        ],
+          ],
+        ),
       ),
     );
   }
+}
 
-  // ==================================================
-  // 🔹 Widget Helper untuk membuat kartu menu
-  // ==================================================
-  Widget _buildMenuCard({
-    required IconData icon, // ikon di kiri
-    required String title, // judul utama
-    required String subtitle, // deskripsi singkat
-    required Color color, // warna tema ikon
-    VoidCallback? onTap, // aksi saat diklik
-  }) {
+class _FeatureTile extends StatelessWidget {
+  final double width;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final Color color;
+  final VoidCallback onTap;
+  final Color shadow;
+
+  const _FeatureTile(
+      {required this.width,
+      required this.icon,
+      required this.title,
+      required this.subtitle,
+      required this.color,
+      required this.onTap,
+      required this.shadow});
+
+  @override
+  Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap, // jalankan fungsi saat kartu ditekan
+      onTap: onTap,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(16),
+        width: width,
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.white, // warna latar belakang kartu
-          borderRadius: BorderRadius.circular(16),
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
           boxShadow: [
-            // Efek bayangan lembut
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.15),
-              blurRadius: 6,
-              offset: const Offset(0, 3),
-            ),
+            BoxShadow(color: shadow, blurRadius: 12, offset: const Offset(0, 6))
           ],
         ),
         child: Row(
           children: [
-            // 🔹 Lingkaran ikon di kiri
             CircleAvatar(
-              backgroundColor: color.withOpacity(0.2),
-              radius: 24,
-              child: Icon(icon, color: color, size: 28),
+              radius: 28,
+              backgroundColor:
+                  Color.fromARGB(28, color.red, color.green, color.blue),
+              child: Icon(icon, color: color, size: 26),
             ),
-            const SizedBox(width: 16),
-
-            // 🔹 Teks judul dan subjudul
+            const SizedBox(width: 10),
             Expanded(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(
-                      color: Colors.black54,
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
-              ),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    Text(subtitle,
+                        style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                  ]),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
-            // 🔹 Ikon panah kecil di kanan
-            const Icon(Icons.arrow_forward_ios,
-                size: 16, color: Colors.grey),
+class _RecommendationCard extends StatelessWidget {
+  final String label;
+  final String subtitle;
+  final Color color;
+  final VoidCallback onTap;
+  const _RecommendationCard(
+      {required this.label,
+      required this.subtitle,
+      required this.color,
+      required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final shadow = Color.fromARGB(28, color.red, color.green, color.blue);
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 200,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(color: shadow, blurRadius: 12, offset: const Offset(0, 6))
+          ],
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+                radius: 26,
+                backgroundColor:
+                    Color.fromARGB(28, color.red, color.green, color.blue),
+                child: Icon(Icons.star, color: color)),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    Text(subtitle,
+                        style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                  ]),
+            ),
           ],
         ),
       ),

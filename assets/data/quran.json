@@ -1,0 +1,33 @@
+[
+  {
+    "nomor": 1,
+    "nama": "الفاتحة",
+    "namaLatin": "Al-Fatihah",
+    "jumlahAyat": 7,
+    "juz": 1,
+    "ayat": [
+      {"index": 1, "text": "بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ", "translation": "Dengan nama Allah Yang Maha Pengasih, Maha Penyayang."},
+      {"index": 2, "text": "الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ", "translation": "Segala puji bagi Allah, Tuhan seluruh alam."},
+      {"index": 3, "text": "الرَّحْمَٰنِ الرَّحِيمِ", "translation": "Yang Maha Pengasih, Maha Penyayang."},
+      {"index": 4, "text": "مَالِكِ يَوْمِ الدِّينِ", "translation": "Penguasa hari pembalasan."},
+      {"index": 5, "text": "إِيَّاكَ نَعْبُدُ وَإِيَّاكَ نَسْتَعِينُ", "translation": "Hanya kepada-Mu kami menyembah dan hanya kepada-Mu kami mohon pertolongan."},
+      {"index": 6, "text": "اهْدِنَا الصِّرَاطَ الْمُسْتَقِيمَ", "translation": "Tunjukilah kami jalan yang lurus,"},
+      {"index": 7, "text": "صِرَاطَ الَّذِينَ أَنْعَمْتَ عَلَيْهِمْ", "translation": "yaitu jalan orang-orang yang Engkau beri nikmat,"}
+    ]
+  },
+  {
+    "nomor": 36,
+    "nama": "يس",
+    "namaLatin": "Yā Sīn",
+    "jumlahAyat": 83,
+    "juz": 22,
+    "ayat": [
+      {"index": 1, "text": "يس", "translation": "Ya-Sin."},
+      {"index": 2, "text": "وَالْقُرْآنِ الْحَكِيمِ", "translation": "Demi Al-Qur'an yang penuh hikmah."},
+      {"index": 3, "text": "إِنَّكَ لَمِنَ الْمُرْسَلِينَ", "translation": "Sesungguhnya engkau (Muhammad) termasuk Rasul-rasul,"},
+      {"index": 4, "text": "عَلَى صِرَاطٍ مُّسْتَقِيمٍ", "translation": "di atas jalan yang lurus."},
+      {"index": 5, "text": "تَنْزِيلَ الْعَزِيزِ الرَّحِيمِ", "translation": "Diturunkan oleh (Allah) Yang Maha Perkasa lagi Maha Penyayang,"},
+      {"index": 6, "text": "لِيُنذِرَ قَوْمًا مَّا أُنذِرَ آبَاؤُهُمْ فَهُمْ غَافِلُونَ", "translation": "untuk memberi peringatan kepada suatu kaum yang nenek-moyang mereka belum diberi peringatan, sebab itu mereka lalai."}
+    ]
+  }
+]

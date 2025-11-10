@@ -1,94 +1,73 @@
 # ================================
-# Nama proyek dan deskripsi
+# // Nama proyek dan deskripsi
 # ================================
 name: hifzh_master
 description: Aplikasi gamifikasi hafalan Al-Qur'an berbasis Flutter
 
-# Proyek ini bersifat lokal (tidak dipublikasikan ke pub.dev)
 publish_to: 'none'
-
-# Versi aplikasi
 version: 1.0.0+1
 
 # ================================
-# Versi SDK Flutter dan Dart
+# // Versi SDK Flutter dan Dart
 # ================================
-# Menentukan versi Dart/Flutter minimal & maksimal yang bisa menjalankan proyek
 environment:
   sdk: ">=3.9.0 <4.0.0"
 
 # ================================
-# Dependency utama aplikasi
+# // Dependency utama aplikasi
 # ================================
 dependencies:
   flutter:
     sdk: flutter
 
-  # Ikon gaya iOS (misalnya ikon default seperti CupertinoActivityIndicator)
+  # // Ikon gaya iOS
   cupertino_icons: ^1.0.8
 
-  # Provider → manajemen state agar data antar-screen saling sinkron
+  # // Provider → manajemen state
   provider: ^6.1.2
 
-  # Hive → database lokal untuk menyimpan data hafalan, user progress, dll.
+  # // Hive → database lokal
   hive: ^2.2.3
   hive_flutter: ^1.1.0
 
-  # Path provider → membantu menyimpan file/audio ke penyimpanan lokal
+  # // Path provider → penyimpanan lokal
   path_provider: ^2.1.3
 
-  # Audio player → untuk memutar suara murattal
+  # // Audio player → memutar murottal
   audioplayers: ^6.0.0
 
-  # Speech-to-Text → agar aplikasi bisa mengenali suara pengguna (mic → teks)
+  # // Speech-to-Text → pengenalan suara
   speech_to_text: ^7.3.0
 
-  # Text-to-Speech → agar aplikasi bisa membaca teks secara suara (TTS)
+  # // Text-to-Speech → pembacaan teks
   flutter_tts: ^4.0.2
 
-  # Permission handler → meminta izin mic/audio/storage dari pengguna
+  # // Permission handler → izin mic/audio
   permission_handler: ^11.3.0
 
-
 # ================================
-# Dependency tambahan untuk testing dan linting
+# // Dependency tambahan untuk testing dan linting
 # ================================
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
-  # Flutter Lints → aturan gaya kode yang lebih modern dan sesuai standar Dart 3
+  # // Flutter Lints → aturan gaya kode modern
   flutter_lints: ^5.0.0
 
-
 # ================================
-# Konfigurasi Flutter
+# // Konfigurasi Flutter
 # ================================
 flutter:
-  uses-material-design: true  # Mengaktifkan ikon Material Design bawaan Flutter
+  uses-material-design: true
 
-  # ============================
-  # Daftar aset yang digunakan
-  # ============================
   assets:
-    # Folder audio (misal: mp3 murattal, suara hafalan)
     - assets/audio/
-
-    # Folder untuk gambar UI dan ilustrasi
     - assets/images/
-
-    # Folder data tambahan (misal: JSON daftar surah)
     - assets/data/
-
-    # Folder font (mushaf / teks Arab)
     - assets/fonts/
 
-
-  # ============================
-  # Daftar font (custom)
-  # ============================
   fonts:
-    # Font utama (Amiri)
     - family: Amiri
       fonts:
         - asset: assets/fonts/Amiri-Regular.ttf
@@ -100,7 +79,6 @@ flutter:
           weight: 700
           style: italic
 
-    # Font khusus mushaf Al-Qur’an
     - family: AmiriQuran
       fonts:
         - asset: assets/fonts/AmiriQuran.ttf

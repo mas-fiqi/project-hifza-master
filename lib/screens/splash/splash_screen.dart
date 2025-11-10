@@ -62,7 +62,7 @@ class _SplashScreenState extends State<SplashScreen> {
                   child: Column(
                     children: const [
                       Text(
-                        'Hifzh Master',
+                        '',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 28,
@@ -78,7 +78,7 @@ class _SplashScreenState extends State<SplashScreen> {
                       ),
                       SizedBox(height: 6),
                       Text(
-                        'Belajar & Menghafal dengan Cinta Al-Qur’an',
+                        '',
                         style: TextStyle(
                           color: Colors.white70,
                           fontSize: 14,
