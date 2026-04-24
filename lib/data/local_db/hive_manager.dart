@@ -11,6 +11,8 @@ class HiveManager {
   static const String boxSearchHistory = 'search_history';
   static const String boxUserProgress = 'user_progress';
   static const String boxSettings = 'app_settings';
+  static const String boxHafalanHistory = 'hafalan_history';
+  static const String boxReadingSession = 'reading_session';
 
   /// Panggil di main() satu kali sebelum runApp()
   static Future<void> init() async {
@@ -27,13 +29,78 @@ class HiveManager {
     // Box lain bisa dibuka tanpa tipe spesifik (dynamic) jika isinya bervariasi
     await Hive.openBox(boxUserProgress);
     await Hive.openBox(boxSettings);
+    await Hive.openBox(boxHafalanHistory);
+    await Hive.openBox(boxReadingSession);
   }
 
   // --- Helper untuk akses box ---
-  // gunakan tipe generik List<dynamic> supaya aman saat mengambil value dari box
   static Box<List<dynamic>> get searchBox => Hive.box<List<dynamic>>(boxSearchHistory);
   static Box get userProgressBox => Hive.box(boxUserProgress);
   static Box get settingsBox => Hive.box(boxSettings);
+  static Box get hafalanHistoryBox => Hive.box(boxHafalanHistory);
+  static Box get readingSessionBox => Hive.box(boxReadingSession);
+
+  /// Simpan surah terakhir dibaca di Kitab Suci
+  static Future<void> saveLastReadSurah(String surahName, int totalAyat) async {
+    await readingSessionBox.put('last_surah_name', surahName);
+    await readingSessionBox.put('last_surah_total_ayat', totalAyat);
+  }
+
+  /// Ambil data surah terakhir dibaca
+  static Map<String, dynamic> getLastReadSurah() {
+    return {
+      'name': readingSessionBox.get('last_surah_name') as String? ?? '',
+      'totalAyat': readingSessionBox.get('last_surah_total_ayat') as int? ?? 0,
+    };
+  }
+
+  /// Hitung sesi tes hafalan yang sudah dilakukan hari ini
+  static int getTodaySessions() {
+    final today = DateTime.now();
+    final items = getAllHafalanHistory();
+    return items.where((item) {
+      final dateStr = item['date'] as String? ?? '';
+      if (dateStr.isEmpty) return false;
+      final date = DateTime.tryParse(dateStr);
+      if (date == null) return false;
+      return date.year == today.year &&
+          date.month == today.month &&
+          date.day == today.day;
+    }).length;
+  }
+
+  /// Simpan list ayat yang sudah dibaca per surah
+  /// history[surah_id] = [1, 2, 3]
+  static Future<void> saveSurahHistory(int surahId, List<int> ayats) async {
+    await userProgressBox.put('history_$surahId', ayats);
+  }
+
+  /// Ambil riwayat ayat per surah
+  static List<int> getSurahHistory(int surahId) {
+    final List? stored = userProgressBox.get('history_$surahId') as List?;
+    if (stored == null) return [];
+    return List<int>.from(stored);
+  }
+
+  /// Simpan skor terakhir per surah
+  static Future<void> saveSurahScore(int surahId, double score) async {
+    await userProgressBox.put('score_$surahId', score);
+  }
+
+  /// Ambil skor terakhir per surah
+  static double getSurahScore(int surahId) {
+    return (userProgressBox.get('score_$surahId') ?? 0.0).toDouble();
+  }
+
+  /// Simpan Histori Hafalan Baru
+  static Future<void> addHafalanHistory(Map<String, dynamic> historyData) async {
+    await hafalanHistoryBox.add(historyData);
+  }
+
+  /// Ambil Semua Histori Hafalan
+  static List<Map<String, dynamic>> getAllHafalanHistory() {
+    return hafalanHistoryBox.values.map((e) => Map<String, dynamic>.from(e as Map)).toList().reversed.toList();
+  }
 
   /// Ambil riwayat (List<String>) — synchronous (tidak memakai await)
   static List<String> loadSearchHistory() {

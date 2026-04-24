@@ -5,10 +5,11 @@ import 'package:provider/provider.dart';
 //import 'core/app_routes.dart'; // opsional bila pakai generateRoute
 import 'data/local_db/hive_manager.dart';
 import 'services/audio_service.dart';
-import 'services/speech_service.dart';
-
-// Screens
-import 'screens/splash/splash_screen.dart';
+import 'package:hifzh_master/services/api_config.dart';
+import 'package:hifzh_master/services/quran_data_service.dart';
+import 'package:hifzh_master/services/speech_service.dart';
+import 'package:hifzh_master/screens/splash/splash_screen.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/surah/surah_list_screen.dart';
 import 'screens/search/search_overlay_screen.dart';
@@ -26,9 +27,15 @@ import 'screens/uji/uji_suara_option_screen.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Inisialisasi Hive (Hanya di sini)
+  // Inisialisasi Database Lokal (Hive)
   await HiveManager.init();
+  
+  // Inisialisasi Data Al-Quran Global
+  await QuranDataService().init();
 
+  // Inisialisasi Date Formatting untuk Bahasa Indonesia
+  await initializeDateFormatting('id_ID', null);
+  
   runApp(const MyApp());
 }
 

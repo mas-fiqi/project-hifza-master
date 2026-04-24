@@ -9,7 +9,7 @@ import 'package:hifzh_master/screens/uji/latihan_makharij_screen.dart';
 import 'package:hifzh_master/screens/uji/latihan_tajwid_screen.dart';
 import 'package:hifzh_master/screens/uji/hafalan_kalimat_screen.dart';
 import 'package:hifzh_master/screens/uji/uji_suara_option_screen.dart';
-
+import 'package:hifzh_master/screens/recorder/recorder_widget.dart';
 
 class AppRoutes {
   // existing constants...

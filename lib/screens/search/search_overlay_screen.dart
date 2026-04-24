@@ -1,11 +1,10 @@
 // lib/screens/search/search_overlay_screen.dart
-import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
 
-import '../../models/surah_model.dart';
-import '../../data/local_db/hive_manager.dart'; // ✅ ganti dari SimpleHive ke HiveManager
-import '../surah/surah_detail_screen.dart';
+import '../../models/quran_model.dart';
+import '../../services/quran_service.dart';
+import '../../data/local_db/hive_manager.dart';
+import '../quran/quran_reader_screen.dart';
 
 class SearchOverlayScreen extends StatefulWidget {
   const SearchOverlayScreen({super.key});
@@ -18,16 +17,16 @@ class _SearchOverlayScreenState extends State<SearchOverlayScreen> {
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
 
-  List<SurahModel> _allSurah = [];
-  List<SurahModel> _results = [];
+  List<Surah> _allSurah = [];
+  List<Surah> _results = [];
   List<String> _history = [];
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    // Load riwayat dari HiveManager (sudah diinisialisasi di main.dart)
     _history = HiveManager.loadSearchHistory();
-    _loadSurahJson();
+    _fetchSurahList();
     _controller.addListener(_onQueryChanged);
   }
 
@@ -39,44 +38,58 @@ class _SearchOverlayScreenState extends State<SearchOverlayScreen> {
     super.dispose();
   }
 
-  /// Load daftar surah dari file JSON
-  Future<void> _loadSurahJson() async {
+  Future<void> _fetchSurahList() async {
     try {
-      final raw = await rootBundle.loadString('assets/data/surah_list.json');
-      final List<dynamic> data = json.decode(raw) as List<dynamic>;
-      _allSurah = data
-          .map((e) => SurahModel.fromJson(e as Map<String, dynamic>))
-          .toList();
+      final list = await QuranService.getSurahList();
       setState(() {
+        _allSurah = list;
         _results = List.from(_allSurah);
+        _isLoading = false;
       });
     } catch (e) {
-      debugPrint('❌ Gagal load surah_list.json: $e');
+      debugPrint('❌ Gagal fetch surah list: $e');
       setState(() {
         _allSurah = [];
         _results = [];
+        _isLoading = false;
       });
     }
   }
 
-  /// Listener pencarian
   void _onQueryChanged() {
     final q = _controller.text.trim().toLowerCase();
     if (q.isEmpty) {
       setState(() => _results = List.from(_allSurah));
     } else {
       setState(() {
+        final qNormalized = q.replaceAll('jus', 'juz').replaceAll(' ', '');
+        
+        // Normalize transliteration differences (yasin vs ya sin, baqarah vs baqara)
+        String normalizeString(String text) {
+           return text.toLowerCase()
+              .replaceAll(RegExp('[\\s\\-\\\'\\"’‘]'), '') // remove spaces, hyphens, quotes
+              .replaceAll('ee', 'i')
+              .replaceAll('oo', 'u')
+              .replaceAll(RegExp(r'([aiueo])\1+'), r'$1') // remove double vowels (aa->a)
+              .replaceAll(RegExp(r'ah$'), 'a'); // baqarah -> baqara
+        }
+        
+        final cleanQ = normalizeString(q);
+        
         _results = _allSurah.where((s) {
-          final matchNama = s.nama.toLowerCase().contains(q);
-          final matchLatin = s.namaLatin.toLowerCase().contains(q);
-          final matchNomor = s.nomor.toString() == q;
-          return matchNama || matchLatin || matchNomor;
+          final cleanNama = normalizeString(s.nama);
+          final cleanLatin = normalizeString(s.namaLatin);
+          
+          final matchNama = cleanNama.contains(cleanQ);
+          final matchLatin = cleanLatin.contains(cleanQ);
+          final matchNomor = s.nomor.toString() == cleanQ;
+          final matchJuz = s.juz.toString() == q || 'juz${s.juz}' == qNormalized;
+          return matchNama || matchLatin || matchNomor || matchJuz;
         }).toList();
       });
     }
   }
 
-  /// Tambahkan kata ke riwayat pencarian
   void _addToHistory(String text) {
     final t = text.trim();
     if (t.isEmpty) return;
@@ -87,11 +100,10 @@ class _SearchOverlayScreenState extends State<SearchOverlayScreen> {
     setState(() {});
   }
 
-  /// Saat user men-tap hasil pencarian
-  void _onTapResult(SurahModel surah) {
+  void _onTapResult(Surah surah) {
     _addToHistory('${surah.nomor} ${surah.namaLatin}');
     Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => SurahDetailScreen(surah: surah),
+      builder: (_) => QuranReaderScreen(surah: surah),
     ));
   }
 
@@ -154,15 +166,17 @@ class _SearchOverlayScreenState extends State<SearchOverlayScreen> {
 
               // Hasil pencarian
               Expanded(
-                child: _results.isEmpty
-                    ? Center(
-                        child: Text(
-                          _controller.text.isEmpty
-                              ? 'Tidak ada data surah.'
-                              : 'Tidak ada hasil untuk "${_controller.text}"',
-                        ),
-                      )
-                    : ListView.separated(
+                child: _isLoading 
+                    ? const Center(child: CircularProgressIndicator())
+                    : _results.isEmpty
+                        ? Center(
+                            child: Text(
+                              _controller.text.isEmpty
+                                  ? 'Tidak ada data surah.'
+                                  : 'Tidak ada hasil untuk "${_controller.text}"',
+                            ),
+                          )
+                        : ListView.separated(
                         itemCount: _results.length,
                         separatorBuilder: (_, __) => const Divider(height: 1),
                         itemBuilder: (context, index) {

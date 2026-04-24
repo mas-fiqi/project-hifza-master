@@ -1,63 +1,46 @@
-# ================================
-# // Nama proyek dan deskripsi
-# ================================
 name: hifzh_master
 description: Aplikasi gamifikasi hafalan Al-Qur'an berbasis Flutter
 
 publish_to: 'none'
 version: 1.0.0+1
 
-# ================================
-# // Versi SDK Flutter dan Dart
-# ================================
 environment:
   sdk: ">=3.9.0 <4.0.0"
 
-# ================================
-# // Dependency utama aplikasi
-# ================================
 dependencies:
   flutter:
     sdk: flutter
 
-  # // Ikon gaya iOS
   cupertino_icons: ^1.0.8
-
-  # // Provider → manajemen state
   provider: ^6.1.2
 
-  # // Hive → database lokal
   hive: ^2.2.3
   hive_flutter: ^1.1.0
 
-  # // Path provider → penyimpanan lokal
   path_provider: ^2.1.3
 
-  # // Audio player → memutar murottal
   audioplayers: ^6.0.0
 
-  # // Speech-to-Text → pengenalan suara
+  # speech_to_text sudah ada di projectmu
   speech_to_text: ^7.3.0
-
-  # // Text-to-Speech → pembacaan teks
   flutter_tts: ^4.0.2
-
-  # // Permission handler → izin mic/audio
   permission_handler: ^11.3.0
 
-# ================================
-# // Dependency tambahan untuk testing dan linting
-# ================================
+  # ----- Tambahan untuk Step 8 (rekam + upload) -----
+  record: ^4.3.0         # untuk merekam audio dan menyimpan ke file
+  http: ^0.13.6          # upload multipart sederhana
+  dio: ^5.2.0            # alternatif untuk upload yang lebih lengkap (opsional)
+  scrollable_positioned_list: ^0.3.8
+  intl: ^0.20.2
+  pdf: ^3.10.8
+  printing: ^5.12.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
-  # // Flutter Lints → aturan gaya kode modern
   flutter_lints: ^5.0.0
 
-# ================================
-# // Konfigurasi Flutter
-# ================================
 flutter:
   uses-material-design: true
 
