@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:hifzh_master/screens/uji/juz_test_screen.dart';
+import 'package:hifzh_master/services/gamification_service.dart';
 
 // Nama surah pertama di tiap juz (untuk label info)
 const _juzFirstSurah = [
@@ -34,8 +35,32 @@ const _arabicNumerals = [
   '٢١','٢٢','٢٣','٢٤','٢٥','٢٦','٢٧','٢٨','٢٩','٣٠',
 ];
 
-class JuzListScreen extends StatelessWidget {
+class JuzListScreen extends StatefulWidget {
   const JuzListScreen({super.key});
+
+  @override
+  State<JuzListScreen> createState() => _JuzListScreenState();
+}
+
+class _JuzListScreenState extends State<JuzListScreen> {
+  Set<int> _unlockedJuz = {1}; // Default Juz 1
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUnlocked();
+  }
+
+  Future<void> _loadUnlocked() async {
+    final unlocked = await GamificationService.getUnlockedJuz();
+    if (mounted) {
+      setState(() {
+        _unlockedJuz = unlocked;
+        _loading = false;
+      });
+    }
+  }
 
   void _onJuzTap(BuildContext context, int juz) {
     Navigator.push(context,
@@ -56,24 +81,31 @@ class JuzListScreen extends StatelessWidget {
           ),
 
           // ── LIST JUZ ──
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final juz = index + 1;
-                  return _JuzListTile(
-                    juz: juz,
-                    arabicName: _juzArabicNames[index],
-                    arabicNum: _arabicNumerals[index],
-                    firstSurah: _juzFirstSurah[index],
-                    onTap: () => _onJuzTap(context, juz),
-                  );
-                },
-                childCount: 30,
+          if (_loading)
+            const SliverFillRemaining(
+              child: Center(child: CircularProgressIndicator(color: Color(0xFFD4AF37))),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 32),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final juz = index + 1;
+                    final isLocked = !_unlockedJuz.contains(juz);
+                    return _JuzListTile(
+                      juz: juz,
+                      arabicName: _juzArabicNames[index],
+                      arabicNum: _arabicNumerals[index],
+                      firstSurah: _juzFirstSurah[index],
+                      isLocked: isLocked,
+                      onTap: isLocked ? null : () => _onJuzTap(context, juz),
+                    );
+                  },
+                  childCount: 30,
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -199,14 +231,16 @@ class _JuzListTile extends StatelessWidget {
   final String arabicName;
   final String arabicNum;
   final String firstSurah;
-  final VoidCallback onTap;
+  final bool isLocked;
+  final VoidCallback? onTap;
 
   const _JuzListTile({
     required this.juz,
     required this.arabicName,
     required this.arabicNum,
     required this.firstSurah,
-    required this.onTap,
+    required this.isLocked,
+    this.onTap,
   });
 
   @override
@@ -218,78 +252,88 @@ class _JuzListTile extends StatelessWidget {
 
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.fromLTRB(16, 14, 20, 14),
-        decoration: BoxDecoration(
-          color: const Color(0xFF122540),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: accent.withOpacity(0.22),
-            width: 1,
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 300),
+        opacity: isLocked ? 0.5 : 1.0,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.fromLTRB(16, 14, 20, 14),
+          decoration: BoxDecoration(
+            color: const Color(0xFF122540),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isLocked ? Colors.white10 : accent.withOpacity(0.22),
+              width: 1,
+            ),
+            boxShadow: [
+              if (!isLocked)
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+            ],
           ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.3),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            // Badge nomor Arab
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                    color: accent.withOpacity(0.5), width: 1.5),
-                color: accent.withOpacity(0.1),
+          child: Row(
+            children: [
+              // Badge nomor Arab / Lock icon
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                      color: isLocked ? Colors.white24 : accent.withOpacity(0.5), 
+                      width: 1.5),
+                  color: isLocked ? Colors.white.withOpacity(0.05) : accent.withOpacity(0.1),
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    if (isLocked)
+                      const Icon(Icons.lock_rounded, color: Colors.white24, size: 18)
+                    else ...[
+                      Icon(Icons.menu_book_rounded,
+                        color: accent, size: 14),
+                      const SizedBox(height: 1),
+                      Text(arabicNum,
+                          style: TextStyle(
+                              color: accent,
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              fontFamily: 'Amiri')),
+                    ]
+                  ],
+                ),
               ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                   Icon(Icons.menu_book_rounded,
-                      color: accent, size: 14),
-                  const SizedBox(height: 1),
-                  Text(arabicNum,
-                      style: TextStyle(
-                          color: accent,
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'Amiri')),
-                ],
-              ),
-            ),
-            const SizedBox(width: 14),
+              const SizedBox(width: 14),
 
-            // Konten teks
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Nama Arab Juz
-                  Text(arabicName,
-                      textDirection: TextDirection.rtl,
-                      style: const TextStyle(
-                          fontFamily: 'Amiri',
-                          fontSize: 18,
-                          color: Colors.white,
-                          height: 1.3)),
-                  const SizedBox(height: 3),
-                  Text('Dimulai dari $firstSurah',
-                      style: TextStyle(
-                          fontSize: 11.5, color: Colors.white.withOpacity(0.45))),
-                ],
+              // Konten teks
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Nama Arab Juz
+                    Text(arabicName,
+                        textDirection: TextDirection.rtl,
+                        style: const TextStyle(
+                            fontFamily: 'Amiri',
+                            fontSize: 18,
+                            color: Colors.white,
+                            height: 1.3)),
+                    const SizedBox(height: 3),
+                    Text('Dimulai dari $firstSurah',
+                        style: TextStyle(
+                            fontSize: 11.5, color: Colors.white.withOpacity(0.45))),
+                  ],
+                ),
               ),
-            ),
 
-            // Arrow
-            Icon(Icons.chevron_right_rounded,
-                color: Colors.white.withOpacity(0.3), size: 22),
-          ],
+              // Arrow
+              Icon(Icons.chevron_right_rounded,
+                  color: Colors.white.withOpacity(0.3), size: 22),
+            ],
+          ),
         ),
       ),
     );

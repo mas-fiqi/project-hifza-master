@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:hifzh_master/models/achievement_model.dart';
 import 'package:hifzh_master/services/gamification_service.dart';
 import 'package:hifzh_master/screens/achievement/certificate_screen.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:hifzh_master/data/local_db/hive_manager.dart';
 
 const _navy     = Color(0xFF0D2137);
 const _navyCard = Color(0xFF122540);
@@ -59,7 +61,30 @@ class _AchievementTabState extends State<AchievementTab> {
         // 2. STATISTIK UTAMA
         _SectionLabel(title: 'Statistik Saya'),
         const SizedBox(height: 10),
-        _StatsGrid(stats: s, level: _level),
+        ValueListenableBuilder(
+          valueListenable: HiveManager.readingSessionBox.listenable(),
+          builder: (ctx, Box rsBox, _) {
+            return ValueListenableBuilder(
+              valueListenable: HiveManager.hafalanHistoryBox.listenable(),
+              builder: (ctx2, Box hhBox, __) {
+                final lastRead = HiveManager.getLastReadSurah();
+                final lastReadValue = lastRead['name'].toString().isEmpty
+                    ? 'Belum ada'
+                    : lastRead['name'].toString();
+                
+                final todayCount = HiveManager.getTodaySessions();
+                final todayValue = '$todayCount sesi';
+
+                return _StatsGrid(
+                  stats: s, 
+                  level: _level, 
+                  lastRead: lastReadValue, 
+                  todaySesi: todayValue
+                );
+              }
+            );
+          }
+        ),
         const SizedBox(height: 20),
 
         // 3. PROGRESS HAFALAN
@@ -263,15 +288,25 @@ class _CertificateCard extends StatelessWidget {
 class _StatsGrid extends StatelessWidget {
   final UserStats stats;
   final String level;
-  const _StatsGrid({required this.stats, required this.level});
+  final String lastRead;
+  final String todaySesi;
+  
+  const _StatsGrid({
+    required this.stats, 
+    required this.level,
+    required this.lastRead,
+    required this.todaySesi,
+  });
 
   @override
   Widget build(BuildContext context) {
     final items = [
       {'label': 'Level', 'value': level, 'icon': Icons.military_tech_rounded, 'color': const Color(0xFF7C3AED)},
       {'label': 'Skor Tertinggi', 'value': '${stats.heighestScore}%', 'icon': Icons.emoji_events_rounded, 'color': _gold},
+      {'label': 'Terakhir Dibaca', 'value': lastRead, 'icon': Icons.menu_book_rounded, 'color': const Color(0xFF3B82F6)},
+      {'label': 'Progres Hari Ini', 'value': todaySesi, 'icon': Icons.timeline_rounded, 'color': _teal},
       {'label': 'Total Bintang', 'value': '${stats.totalStars} ⭐', 'icon': Icons.star_rounded, 'color': const Color(0xFFF59E0B)},
-      {'label': 'Total Sesi', 'value': '${stats.totalSessions}x', 'icon': Icons.fitness_center_rounded, 'color': _teal},
+      {'label': 'Total Sesi', 'value': '${stats.totalSessions}x', 'icon': Icons.fitness_center_rounded, 'color': Colors.pinkAccent},
     ];
 
     return GridView.count(

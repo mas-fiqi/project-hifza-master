@@ -31,6 +31,36 @@ class HiveManager {
     await Hive.openBox(boxSettings);
     await Hive.openBox(boxHafalanHistory);
     await Hive.openBox(boxReadingSession);
+
+    // --- MIGRATION LOGIC (KEMBALIKAN DATA LAMA) ---
+    try {
+      await Hive.openBox('history');
+      final oldBox = Hive.box('history');
+      final newBox = Hive.box(boxHafalanHistory);
+      
+      if (oldBox.isNotEmpty) {
+        print("[MIGRATION] Found ${oldBox.length} old history items. Migrating...");
+        for (var key in oldBox.keys) {
+          final oldData = oldBox.get(key);
+          if (oldData is Map) {
+            // Map old structure to new structure
+            final newData = {
+              'surahName': oldData['title'] ?? oldData['surahName'] ?? 'Riwayat Lama',
+              'surahNameArabic': oldData['surahNameArabic'] ?? '',
+              'score': (oldData['points'] ?? oldData['score'] ?? 0).toDouble(),
+              'mistakes': oldData['mistakes'] ?? 0,
+              'date': oldData['date'] ?? DateTime.now().toIso8601String(),
+              'isMigrated': true,
+            };
+            await newBox.add(newData);
+          }
+        }
+        await oldBox.clear(); // Bersihkan agar tidak migrasi ulang
+        print("[MIGRATION] Migration complete.");
+      }
+    } catch (e) {
+      print("[MIGRATION] Error during migration: $e");
+    }
   }
 
   // --- Helper untuk akses box ---

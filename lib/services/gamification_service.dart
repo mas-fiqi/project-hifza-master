@@ -111,4 +111,73 @@ class GamificationService {
      if (stats.totalSessions >= 5) return "Santri Aktif";
      return "Pemula";
   }
+
+  static Future<bool> isSurahUnlocked(int surahId) async {
+    final unlocked = await getUnlockedSurahs();
+    return unlocked.contains(surahId);
+  }
+
+  static Future<bool> isJuzUnlocked(int juzNumber) async {
+    final unlocked = await getUnlockedJuz();
+    return unlocked.contains(juzNumber);
+  }
+
+  static Future<Set<int>> getUnlockedSurahs() async {
+    final items = HiveManager.getAllHafalanHistory();
+    Set<int> passedSurahs = {1}; // Al-Fatihah selalu buka
+    
+    // Juz 30 (78-114) selalu terbuka
+    for (int i = 78; i <= 114; i++) {
+      passedSurahs.add(i);
+    }
+
+    // Ambil surah yang sudah dapet bintang 3 (score >= 85)
+    Set<int> masteredSurahs = {};
+    for (var item in items) {
+      final id = item['surahId'];
+      final score = item['score'] ?? 0;
+      final name = item['surahName']?.toString().toLowerCase() ?? "";
+      if (id != null && score >= 85 && !name.contains("juz")) {
+        masteredSurahs.add(id);
+      }
+    }
+
+    // Buka surah n jika n-1 sudah mastered
+    for (int i = 2; i <= 77; i++) {
+      if (masteredSurahs.contains(i - 1)) {
+        passedSurahs.add(i);
+      }
+    }
+
+    return passedSurahs;
+  }
+
+  static Future<Set<int>> getUnlockedJuz() async {
+    final items = HiveManager.getAllHafalanHistory();
+    Set<int> passedJuz = {1}; // Juz 1 selalu buka
+    
+    // Ambil juz yang sudah dapet bintang 3
+    Set<int> masteredJuz = {};
+    for (var item in items) {
+      final name = item['surahName']?.toString().toLowerCase() ?? "";
+      final score = item['score'] ?? 0;
+      if (name.contains("juz") && score >= 85) {
+        // Ekstrak nomor juz dari "juz X"
+        final parts = name.split(" ");
+        if (parts.length >= 2) {
+          final num = int.tryParse(parts[1]);
+          if (num != null) masteredJuz.add(num);
+        }
+      }
+    }
+
+    // Buka juz n jika n-1 sudah mastered
+    for (int i = 2; i <= 30; i++) {
+      if (masteredJuz.contains(i - 1)) {
+        passedJuz.add(i);
+      }
+    }
+
+    return passedJuz;
+  }
 }

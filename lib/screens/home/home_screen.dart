@@ -186,51 +186,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
             const SizedBox(height: 14),
 
-            // ── LIVE INFO BOXES ──
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: ValueListenableBuilder(
-                valueListenable: HiveManager.readingSessionBox.listenable(),
-                builder: (ctx, Box rsBox, _) {
-                  return ValueListenableBuilder(
-                    valueListenable:
-                        HiveManager.hafalanHistoryBox.listenable(),
-                    builder: (ctx2, Box hhBox, __) {
-                      final lastRead = HiveManager.getLastReadSurah();
-                      final surahName = lastRead['name'] as String;
-                      final totalAyat = lastRead['totalAyat'] as int;
-                      final lastReadValue = surahName.isEmpty
-                          ? 'Belum ada bacaan'
-                          : '$surahName · $totalAyat ayat';
-                      final todayCount = HiveManager.getTodaySessions();
-                      final todayValue = todayCount == 0
-                          ? 'Belum ada sesi'
-                          : '$todayCount sesi hari ini';
-
-                      return Row(
-                        children: [
-                          _InfoBox(
-                            label: 'Terakhir Dibaca',
-                            value: lastReadValue,
-                            icon: Icons.menu_book_rounded,
-                            accentColor: _gold,
-                          ),
-                          const SizedBox(width: 10),
-                          _InfoBox(
-                            label: 'Progres Hari Ini',
-                            value: todayValue,
-                            icon: Icons.timeline_rounded,
-                            accentColor: _teal,
-                          ),
-                        ],
-                      );
-                    },
-                  );
-                },
-              ),
-            ),
-
-            const SizedBox(height: 14),
+            const SizedBox(height: 10),
 
             // ── SEARCH BAR ──
             Padding(
@@ -548,59 +504,6 @@ class _StreakCard extends StatelessWidget {
   }
 }
 
-// ── Info Box ──
-class _InfoBox extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color accentColor;
-
-  const _InfoBox({
-    required this.label,
-    required this.value,
-    required this.icon,
-    required this.accentColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-        decoration: BoxDecoration(
-          color: accentColor.withOpacity(0.08),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: accentColor.withOpacity(0.25)),
-        ),
-        child: Row(
-          children: [
-            Icon(icon, color: accentColor, size: 18),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(label,
-                      style: TextStyle(
-                          color: Colors.white.withOpacity(0.45),
-                          fontSize: 10)),
-                  const SizedBox(height: 2),
-                  Text(value,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 11.5),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 // ── Feature Card (2-col) ──
 class _FeatureCard extends StatelessWidget {

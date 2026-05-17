@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
+
 import 'package:hifzh_master/services/quran_data_service.dart';
 import 'package:hifzh_master/data/local_db/hive_manager.dart';
 import 'package:hifzh_master/data/surah_data.dart';
@@ -24,7 +25,7 @@ class JuzTestScreen extends StatefulWidget {
   State<JuzTestScreen> createState() => _JuzTestScreenState();
 }
 
-class _JuzTestScreenState extends State<JuzTestScreen> {
+class _JuzTestScreenState extends State<JuzTestScreen> with SingleTickerProviderStateMixin {
   // ===== COLORS (Islamic Navy & Gold) =====
   static const _navy     = Color(0xFF0D2137);
   static const _navyCard = Color(0xFF122540);
@@ -57,12 +58,25 @@ class _JuzTestScreenState extends State<JuzTestScreen> {
   int _secondsSinceLastWord = 0;
   bool _isTransitioning = false;
   String _processedRawPrefix = "";
+  bool _isCalculatingScore = false;
+  
+  // Pre-compiled RegEx for performance (Gercep)
+  // Menjaga huruf dasar Arab, Hamzah, dan Alif Wasla
+  final _arabKeepRegex = RegExp(r'[^\u0621-\u064A\u0671]'); 
+  final _arabAlifRegex = RegExp(r'[أإآٱ]');
+  final _latinNormRegex = RegExp(r'[^a-z0-9]');
 
   final ItemScrollController _itemScrollController = ItemScrollController();
+  late AnimationController _pulseController;
 
   @override
   void initState() {
     super.initState();
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 1),
+    )..repeat(reverse: true);
+    
     _speech = stt.SpeechToText();
     _loadData();
     _initSpeech();
@@ -73,6 +87,7 @@ class _JuzTestScreenState extends State<JuzTestScreen> {
     _isManualRecording = false;
     _speech.stop();
     _silenceTimer?.cancel();
+    _pulseController.dispose();
     super.dispose();
   }
 
@@ -115,26 +130,35 @@ class _JuzTestScreenState extends State<JuzTestScreen> {
     try {
       bool available = await _speech.initialize(
         onError: (val) {
+          print("[DEBUG-STT] Error: ${val.errorMsg} - Permanent: ${val.permanent}");
           if (_isManualRecording && mounted && !_isFinished) {
              _sessionBuffer = ("$_sessionBuffer $_lastRecognizedWords").trim();
              _lastRecognizedWords = "";
-             Future.delayed(const Duration(milliseconds: 500), () {
+             Future.delayed(const Duration(milliseconds: 800), () {
                 if (_isManualRecording && mounted) _startListening(isRestart: true);
              });
           }
         },
         onStatus: (val) {
+          print("[DEBUG-STT] Status: $val");
           if (val == 'done' && mounted && _isManualRecording && !_isFinished) {
              _sessionBuffer = ("$_sessionBuffer $_lastRecognizedWords").trim();
              _lastRecognizedWords = "";
-             Future.delayed(const Duration(milliseconds: 500), () {
+             Future.delayed(const Duration(milliseconds: 800), () {
                 if (_isManualRecording && mounted) _startListening(isRestart: true);
              });
           }
         },
       );
       if (available && mounted) {
-        setState(() => _currentLocaleId = 'ar-SA');
+        // Cek apakah ar-SA didukung
+        var locales = await _speech.locales();
+        bool hasAr = locales.any((l) => l.localeId.contains('ar'));
+        print("[DEBUG-STT] Available Locales: ${locales.length}. Has Arabic: $hasAr");
+        
+        setState(() => _currentLocaleId = hasAr 
+          ? locales.firstWhere((l) => l.localeId.contains('ar')).localeId 
+          : 'ar-SA');
       }
     } catch (_) {}
   }
@@ -146,6 +170,7 @@ class _JuzTestScreenState extends State<JuzTestScreen> {
       _isManualRecording = true;
       _isTransitioning = false; // Buka kunci saat sesi baru dimulai
       if (!isRestart) {
+        print("[DEBUG-STT] Resetting Buffers & Releasing Lock");
         // Strict isolation: always clear buffer when not a continuous restart
         _sessionBuffer = "";
         _lastRecognizedWords = "";
@@ -155,16 +180,24 @@ class _JuzTestScreenState extends State<JuzTestScreen> {
     });
     _speech.listen(
       onResult: (val) {
-        if (_recordStatus != RecordStatus.listening) return; // Prevent ghost text after stop
+        if (_recordStatus != RecordStatus.listening || _isTransitioning) return;
         if (val.recognizedWords.isNotEmpty) {
           _lastRecognizedWords = val.recognizedWords;
           _secondsSinceLastWord = 0;
+          
+          // Gercep: Update UI immediately
+          if (_liveSpeech != val.recognizedWords) {
+            setState(() => _liveSpeech = val.recognizedWords);
+          }
+          
+          // Then evaluate match
           _evaluateBuffer(forceFail: false);
         }
       },
       localeId: _currentLocaleId,
       partialResults: true,
-      listenMode: stt.ListenMode.dictation,
+      listenMode: stt.ListenMode.confirmation,
+      cancelOnError: false,
     );
   }
 
@@ -209,7 +242,7 @@ class _JuzTestScreenState extends State<JuzTestScreen> {
 
   // ===== EVALUATION ENGINE =====
   void _evaluateBuffer({bool forceFail = false}) {
-    if (_currentStep > _sessionAyats.length) return;
+    if (_currentStep > _sessionAyats.length || _isTransitioning) return;
 
     int idx = _currentStep - 1;
     var target = _sessionAyats[idx];
@@ -230,8 +263,14 @@ class _JuzTestScreenState extends State<JuzTestScreen> {
     print("[DEBUG-EVAL] Mendengar suara: '$speech'");
     print("[DEBUG-EVAL] Normalisasi: '$normArab'");
 
-    double simArab = _calculateSimilarity(_stripAlif(normArab), _stripAlif(targetArab));
-    bool isMatch = simArab >= 0.88; // INCREASED SENSITIVITY
+    bool isMatch = false;
+    double simArab = 0.0;
+    
+    // Quick word-by-word match check for early feedback (Gercep)
+    if (forceFail || normArab.length >= targetArab.length * 0.6) {
+      simArab = _calculateSimilarity(_stripAlif(normArab), _stripAlif(targetArab));
+      isMatch = simArab >= 0.88;
+    }
 
     // AUTO-FAIL IF SPEECH EXCEEDS TARGET LENGTH (Kompleks salah -> Lanjut)
     int targetWordCount = target["arab"]?.toString().trim().split(RegExp(r'\s+')).length ?? 1;
@@ -245,16 +284,19 @@ class _JuzTestScreenState extends State<JuzTestScreen> {
 
     if (isMatch) {
       print("[DEBUG-EVAL] => STATUS: BERHASIL! Lanjut ayat berikutnya.");
+      _silenceTimer?.cancel(); // Stop timer immediately
       setState(() {
+        _isTransitioning = true; 
         _ayatResult[idx] = target["arab"];
         _ayatErrors.remove(idx);
         _isRetryingAyat = false;
-        _currentStep++;
         
-        // Immediate buffer clear to prevent ghost text
+        // Wipe everything immediately
         _sessionBuffer = "";
         _lastRecognizedWords = "";
         _liveSpeech = "";
+        
+        _currentStep++;
       });
       _advanceAfterEval();
     } else if (forceFail) {
@@ -306,6 +348,8 @@ class _JuzTestScreenState extends State<JuzTestScreen> {
     }
   }
 
+
+
   void _finishTest() {
     _isFinished = true;
     _recordStatus = RecordStatus.idle;
@@ -340,10 +384,20 @@ class _JuzTestScreenState extends State<JuzTestScreen> {
     _showEvaluationModal(acc);
   }
 
-  // ===== NORMALIZERS & MATH =====
-  String _normalizeArab(String t) => t.replaceAll(RegExp(r'[^\u0621-\u064A]'), '').replaceAll(RegExp(r'[أإآٱ]'), 'ا').replaceAll('ى', 'ي').replaceAll('ة', 'ه');
+  // ===== NORMALIZERS & MATH (Optimized) =====
+  String _normalizeArab(String t) {
+    if (t.isEmpty) return "";
+    return t
+      .replaceAll(RegExp(r'[\u064B-\u065F\u0670]'), '') // Buang harakat & Alif Khanjariyah
+      .replaceAll(_arabAlifRegex, 'ا')                 // Samakan Alif (termasuk Wasla)
+      .replaceAll('ى', 'ي')                            // Samakan Alif Maqsura
+      .replaceAll('ة', 'ه')                            // Samakan Ta Marbuthah
+      .replaceAll(_arabKeepRegex, '')                  // Buang karakter non-huruf Arab sisa
+      .replaceAll(' ', '');                            // Buang spasi
+  }
+
   String _stripAlif(String t) => t.replaceAll('ا', '');
-  String _normalizeLatin(String t) => t.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+  String _normalizeLatin(String t) => t.toLowerCase().replaceAll(_latinNormRegex, '');
   double _calculateSimilarity(String s1, String s2) {
     if (s1 == s2) return 1.0; if (s1.isEmpty || s2.isEmpty) return 0.0;
     List<int> p = List.generate(s2.length+1, (i)=>i);
@@ -359,17 +413,27 @@ class _JuzTestScreenState extends State<JuzTestScreen> {
 
   void _advanceAfterEval() {
     if (_currentStep > _sessionAyats.length) {
-       _finishTest();
-    } else {
-       _scrollToIndex(_currentStep - 1);
-       _pauseListening(); // Force STT engine buffer to clear
-       
-       // Restart mic automatically for the next ayah if not in manual retry mode
-       Future.delayed(const Duration(milliseconds: 300), () {
-          if (mounted && !_isFinished && !_isRetryingAyat) {
-             _startListening(isRestart: false); // Starts with completely clean buffer
+       _pauseListening();
+       setState(() {
+         _isCalculatingScore = true;
+       });
+       // Beri jeda 1.5 detik agar animasi ayat terakhir selesai dan terasa lebih halus
+       Future.delayed(const Duration(milliseconds: 1500), () {
+          if (mounted) {
+             setState(() { _isCalculatingScore = false; });
+             _finishTest();
           }
        });
+    } else {
+        _scrollToIndex(_currentStep - 1);
+        _pauseListening(); 
+        
+        // Restart mic automatically with optimized delay
+        Future.delayed(const Duration(milliseconds: 800), () {
+           if (mounted && !_isFinished && !_isRetryingAyat) {
+              _startListening(isRestart: false); 
+           }
+        });
     }
   }
 
@@ -487,60 +551,170 @@ class _JuzTestScreenState extends State<JuzTestScreen> {
     if (i != _currentStep - 1) return _buildEmptyCard(i, data, isCurrent: false);
     
     String speech = _liveSpeech.isEmpty ? (_ayatErrors[i] ?? "") : _liveSpeech;
-    
-    // Fallback jika belum bicara apa-apa
     if (speech.isEmpty) return _buildEmptyCard(i, data, isCurrent: true);
 
-    List<String> speechWords = speech.split(RegExp(r'\s+'));
-    List<String> targetWords = data['arab'].toString().split(RegExp(r'\s+'));
+    List<String> targetWords = data['arab'].toString().trim().split(RegExp(r'\s+'));
+    String normSpeech = _normalizeArab(speech);
     
-    List<TextSpan> spans = [];
-    for (String sw in speechWords) {
-      if (sw.isEmpty) continue;
-      String normSw = _stripAlif(_normalizeArab(sw));
-      
-      bool isMatch = false;
-      for (String tw in targetWords) {
-        String normTw = _stripAlif(_normalizeArab(tw));
-        if (normTw == normSw || _calculateSimilarity(normSw, normTw) >= 0.85) {
-          isMatch = true;
-          break;
-        }
-      }
-      
-      spans.add(TextSpan(
-        text: "$sw ",
-        style: TextStyle(
-          color: isMatch ? _teal : Colors.redAccent,
-          fontFamily: 'Amiri',
-          fontSize: 24,
-          height: 1.8,
-          fontWeight: isMatch ? FontWeight.bold : FontWeight.normal
-        )
-      ));
-    }
-
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: _navyCard,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _gold.withOpacity(0.4)),
+        border: Border.all(color: _gold.withOpacity(0.6), width: 1.5),
+        boxShadow: [
+          BoxShadow(color: _gold.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildCircleNum(data['ayat'], _gold),
+              const Expanded(
+                child: Text(
+                  "Target Ayat:",
+                  style: TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.right,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // Target Text (Dimmed)
+          Text(
+            data['arab'],
+            textAlign: TextAlign.right,
+            textDirection: TextDirection.rtl,
+            style: TextStyle(
+              fontFamily: 'Amiri',
+              fontSize: 22,
+              color: Colors.white.withOpacity(0.3),
+              height: 1.6,
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Divider(color: Colors.white10, height: 1),
+          ),
+          // Actual Spoken Text (What the user UTTERED)
+          Row(
+            children: [
+              const Icon(Icons.record_voice_over_rounded, color: _gold, size: 16),
+              const SizedBox(width: 8),
+              const Text("Bacaan Kamu:", style: TextStyle(color: _gold, fontSize: 10, fontWeight: FontWeight.bold)),
+              const Spacer(),
+            ],
+          ),
+          const SizedBox(height: 4),
+          _buildColoredSpeech(speech, data['arab'], isLive: _liveSpeech.isNotEmpty),
+          if (_isRetryingAyat && i == _currentStep - 1) ...[
+            _buildMissingWordsWarning(speech, data['arab']),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.redAccent.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.history_rounded, color: Colors.redAccent, size: 14),
+                  SizedBox(width: 6),
+                  Text("KESEMPATAN TERAKHIR (Percobaan ke-2)", style: TextStyle(color: Colors.redAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildColoredSpeech(String speech, String target, {bool isLive = true}) {
+    if (speech.isEmpty) return const SizedBox();
+    
+    List<String> speechWords = speech.trim().split(RegExp(r'\s+'));
+    List<String> targetWords = target.trim().split(RegExp(r'\s+'));
+    
+    // Normalize target words for comparison
+    List<String> normTargetWords = targetWords.map((w) => _normalizeArab(w)).toList();
+    
+    return Text.rich(
+      TextSpan(
+        children: speechWords.map((word) {
+          String normWord = _normalizeArab(word);
+          bool isMatch = normTargetWords.contains(normWord);
+          
+          return TextSpan(
+            text: '$word ',
+            style: TextStyle(
+              fontFamily: 'Amiri',
+              fontSize: isLive ? 24 : 22,
+              color: isMatch ? (isLive ? Colors.white : Colors.white70) : Colors.redAccent,
+              height: 1.8,
+              fontWeight: isMatch ? FontWeight.bold : FontWeight.w900,
+              decoration: isMatch ? TextDecoration.none : TextDecoration.underline,
+              decorationColor: Colors.redAccent.withOpacity(0.5),
+            ),
+          );
+        }).toList(),
+      ),
+      textAlign: TextAlign.right,
+      textDirection: TextDirection.rtl,
+    );
+  }
+
+  Widget _buildMissingWordsWarning(String speech, String target) {
+    if (speech.isEmpty) return const SizedBox();
+    
+    List<String> speechWords = speech.trim().split(RegExp(r'\s+'));
+    List<String> targetWords = target.trim().split(RegExp(r'\s+'));
+    
+    List<String> normSpeechWords = speechWords.map((w) => _normalizeArab(w)).toList();
+    List<String> missingWords = [];
+    
+    for (String tWord in targetWords) {
+      if (!normSpeechWords.contains(_normalizeArab(tWord))) {
+        missingWords.add(tWord);
+      }
+    }
+
+    if (missingWords.isEmpty) return const SizedBox();
+
+    return Container(
+      margin: const EdgeInsets.only(top: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.orangeAccent.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.orangeAccent.withOpacity(0.3)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildCircleNum(data['ayat'], _gold),
-          const SizedBox(width: 16),
+          const Icon(Icons.warning_amber_rounded, color: Colors.orangeAccent, size: 16),
+          const SizedBox(width: 8),
           Expanded(
-            child: RichText(
-              textAlign: TextAlign.right,
-              textDirection: TextDirection.rtl,
-              text: TextSpan(children: spans),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text("Ada kata yang terlewat / tidak terdengar:", style: TextStyle(color: Colors.orangeAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+                const SizedBox(height: 4),
+                Text(
+                  missingWords.join("   "),
+                  textAlign: TextAlign.right,
+                  textDirection: TextDirection.rtl,
+                  style: const TextStyle(fontFamily: 'Amiri', fontSize: 18, color: Colors.orangeAccent, fontWeight: FontWeight.bold),
+                ),
+              ],
             ),
           ),
-          const Icon(Icons.keyboard_voice_rounded, color: _gold, size: 20),
         ],
       ),
     );
@@ -549,56 +723,58 @@ class _JuzTestScreenState extends State<JuzTestScreen> {
   Widget _buildFailedCard(int i, Map data) {
     String speech = _ayatErrors[i] ?? "Hening / Tidak terdeteksi";
     
-    List<String> speechWords = speech.split(RegExp(r'\s+'));
-    List<String> targetWords = data['arab'].toString().split(RegExp(r'\s+'));
-    
-    List<TextSpan> spans = [];
-    for (String sw in speechWords) {
-      if (sw.isEmpty) continue;
-      String normSw = _stripAlif(_normalizeArab(sw));
-      
-      bool isMatch = false;
-      for (String tw in targetWords) {
-        String normTw = _stripAlif(_normalizeArab(tw));
-        if (normTw == normSw || _calculateSimilarity(normSw, normTw) >= 0.85) {
-          isMatch = true;
-          break;
-        }
-      }
-      
-      spans.add(TextSpan(
-        text: "$sw ",
-        style: TextStyle(
-          color: isMatch ? _teal : Colors.redAccent,
-          fontFamily: 'Amiri',
-          fontSize: 24,
-          height: 1.8,
-          fontWeight: isMatch ? FontWeight.bold : FontWeight.normal
-        )
-      ));
-    }
-
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: _navyCard,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.redAccent.withOpacity(0.7)),
+        border: Border.all(color: Colors.redAccent.withOpacity(0.5), width: 1),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildCircleNum(data['ayat'], Colors.redAccent),
-          const SizedBox(width: 16),
-          Expanded(
-            child: RichText(
-              textAlign: TextAlign.right,
-              textDirection: TextDirection.rtl,
-              text: TextSpan(children: spans),
+          Row(
+            children: [
+              _buildCircleNum(data['ayat'], Colors.redAccent),
+              const Expanded(
+                child: Text(
+                  "Seharusnya:",
+                  style: TextStyle(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.right,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // Target Text (Correct)
+          Text(
+            data['arab'],
+            textAlign: TextAlign.right,
+            textDirection: TextDirection.rtl,
+            style: const TextStyle(
+              fontFamily: 'Amiri',
+              fontSize: 20,
+              color: Colors.white60,
+              height: 1.6,
             ),
           ),
-          const Icon(Icons.close_rounded, color: Colors.redAccent, size: 20),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Divider(color: Colors.white10, height: 1),
+          ),
+          // Wrong Spoken Text (What the user ACTUALLY SAID)
+          Row(
+            children: [
+              const Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 16),
+              const SizedBox(width: 8),
+              const Text("Bacaan Kamu:", style: TextStyle(color: Colors.redAccent, fontSize: 10, fontWeight: FontWeight.bold)),
+              const Spacer(),
+            ],
+          ),
+          const SizedBox(height: 4),
+          _buildColoredSpeech(speech, data['arab'], isLive: false),
+          _buildMissingWordsWarning(speech, data['arab']),
         ],
       ),
     );
@@ -652,7 +828,11 @@ class _JuzTestScreenState extends State<JuzTestScreen> {
     String subText = "";
     Color statusColor = Colors.white;
 
-    if (isListening) {
+    if (_isCalculatingScore) {
+       statusText = "✨ Alhamdulillah, Selesai!";
+       subText = "Menyiapkan hasil evaluasi Anda...";
+       statusColor = _gold;
+    } else if (isListening) {
        statusText = _isRetryingAyat ? "🔄 Mengulang Bacaan..." : "Sistem Mendengar...";
        subText = "Silakan baca ayat ke-$_currentStep";
        statusColor = _isRetryingAyat ? Colors.orangeAccent : Colors.white;
@@ -672,18 +852,38 @@ class _JuzTestScreenState extends State<JuzTestScreen> {
     return Row(
       children: [
         GestureDetector(
-          onTap: _toggleMic,
-          child: Container(
-            width: 60, height: 60,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle, 
-              color: isListening ? Colors.red : (_isRetryingAyat ? Colors.orangeAccent : _gold), 
-              boxShadow: [BoxShadow(color: (isListening ? Colors.red : _gold).withOpacity(0.3), blurRadius: 12, offset: const Offset(0, 5))],
-            ),
-            child: Icon(
-              isListening ? Icons.pause_rounded : (_isRetryingAyat ? Icons.replay_rounded : Icons.mic_rounded), 
-              color: Colors.white, size: 28,
-            ),
+          onTap: _isCalculatingScore ? null : _toggleMic,
+          child: AnimatedBuilder(
+            animation: _pulseController,
+            builder: (context, child) {
+              double scale = isListening || _isCalculatingScore ? 1.0 + (_pulseController.value * 0.15) : 1.0;
+              return Transform.scale(
+                scale: scale,
+                child: Container(
+                  width: 60, height: 60,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle, 
+                    color: _isCalculatingScore ? _gold : (isListening ? Colors.red : (_isRetryingAyat ? Colors.orangeAccent : _gold)), 
+                    boxShadow: [
+                      BoxShadow(
+                        color: (_isCalculatingScore ? _gold : (isListening ? Colors.red : _gold)).withOpacity(isListening || _isCalculatingScore ? 0.2 + (_pulseController.value * 0.3) : 0.3), 
+                        blurRadius: isListening || _isCalculatingScore ? 15 + (_pulseController.value * 10) : 12, 
+                        offset: const Offset(0, 5)
+                      )
+                    ],
+                  ),
+                  child: _isCalculatingScore 
+                    ? const Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: CircularProgressIndicator(color: _navy, strokeWidth: 3),
+                      )
+                    : Icon(
+                        isListening ? Icons.pause_rounded : (_isRetryingAyat ? Icons.replay_rounded : Icons.mic_rounded), 
+                        color: Colors.white, size: 28,
+                      ),
+                ),
+              );
+            },
           ),
         ),
         const SizedBox(width: 20),
@@ -697,7 +897,8 @@ class _JuzTestScreenState extends State<JuzTestScreen> {
             ],
           ),
         ),
-        IconButton(onPressed: _stopListening, icon: const Icon(Icons.stop_rounded, color: Colors.white54, size: 32))
+        if (!_isCalculatingScore)
+          IconButton(onPressed: _stopListening, icon: const Icon(Icons.stop_rounded, color: Colors.white54, size: 32))
       ],
     );
   }
@@ -715,22 +916,84 @@ class _JuzTestScreenState extends State<JuzTestScreen> {
 
   void _showEvaluationModal(double acc) {
     int stars = acc >= 85 ? 3 : (acc >= 70 ? 2 : (acc >= 50 ? 1 : 0));
+    
+    // Logika Next Lesson
+    int? nextSurah;
+    int? nextJuz;
+    String nextLabel = "";
+
+    if (widget.initialJuz != null && widget.initialJuz! < 30) {
+      nextJuz = widget.initialJuz! + 1;
+      nextLabel = "Juz $nextJuz";
+    } else if (widget.initialSurah != null && widget.initialSurah! < 114) {
+      nextSurah = widget.initialSurah! + 1;
+      nextLabel = SurahData.allSurahNames[nextSurah - 1];
+    }
+
     showModalBottomSheet(
       context: context,
+      isDismissible: false,
+      enableDrag: false,
       backgroundColor: Colors.transparent,
       builder: (_) => Container(
         padding: const EdgeInsets.all(32),
-        decoration: const BoxDecoration(color: _navy, borderRadius: BorderRadius.only(topLeft: Radius.circular(30), topRight: Radius.circular(30))),
+        decoration: const BoxDecoration(
+          color: _navy, 
+          borderRadius: BorderRadius.only(topLeft: Radius.circular(30), topRight: Radius.circular(30)),
+          boxShadow: [BoxShadow(color: Colors.black54, blurRadius: 20, spreadRadius: 5)]
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('SKOR AKHIR', style: TextStyle(color: Colors.white60, letterSpacing: 2, fontSize: 12)),
-            const SizedBox(height: 8),
-            Text('${acc.toStringAsFixed(1)}%', style: const TextStyle(color: _gold, fontSize: 42, fontWeight: FontWeight.bold)),
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 20),
+            const Text('HASIL EVALUASI', style: TextStyle(color: Colors.white60, letterSpacing: 2, fontSize: 12, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            Text('${acc.toStringAsFixed(1)}%', style: const TextStyle(color: _gold, fontSize: 48, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
-            Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(3, (i) => Icon(i < stars ? Icons.star_rounded : Icons.star_outline_rounded, color: _gold, size: 48))),
+            Row(mainAxisAlignment: MainAxisAlignment.center, children: List.generate(3, (i) => Icon(i < stars ? Icons.star_rounded : Icons.star_outline_rounded, color: _gold, size: 52))),
             const SizedBox(height: 32),
-            SizedBox(width: double.infinity, child: ElevatedButton(onPressed: ()=>Navigator.pop(context), style: ElevatedButton.styleFrom(backgroundColor: _teal, padding: const EdgeInsets.symmetric(vertical: 16), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16))), child: const Text('LANJUT', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)))),
+            
+            // Button: Lanjut ke Surah/Juz Berikutnya (Hanya jika dapat bintang 3)
+            if (nextLabel.isNotEmpty && stars == 3) ...[
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context); // Tutup modal
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(builder: (_) => JuzTestScreen(initialSurah: nextSurah, initialJuz: nextJuz))
+                    );
+                  },
+                  icon: const Icon(Icons.skip_next_rounded, color: _navy),
+                  label: Text('LANJUT KE $nextLabel', style: const TextStyle(color: _navy, fontWeight: FontWeight.bold, fontSize: 15)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _gold, 
+                    padding: const EdgeInsets.symmetric(vertical: 18), 
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    elevation: 8,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+
+            // Button: Selesai / Kembali ke Menu
+            SizedBox(
+              width: double.infinity,
+              child: TextButton(
+                onPressed: () {
+                  Navigator.pop(context);
+                  Navigator.pop(context);
+                },
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: Colors.white.withOpacity(0.1))),
+                ),
+                child: const Text('KEMBALI KE MENU', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600)),
+              ),
+            ),
           ],
         ),
       ),

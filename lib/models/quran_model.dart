@@ -32,6 +32,7 @@ class Surah {
   final int jumlahAyat;
   final int juz;
   final List<Ayat> ayat;
+  final String tempatTurun; // Mekah / Madinah (dari equran.id: 'tempatTurun')
 
   Surah({
     required this.nomor,
@@ -40,6 +41,7 @@ class Surah {
     required this.jumlahAyat,
     required this.juz,
     required this.ayat,
+    this.tempatTurun = '',
   });
 
   factory Surah.fromJson(Map<String, dynamic> j) {
@@ -48,7 +50,7 @@ class Surah {
     if (rawAyat is List) {
        parsedAyat = rawAyat.map((e) => Ayat.fromJson(e as Map<String, dynamic>)).toList();
     }
-    
+
     return Surah(
       nomor: (j['nomor'] ?? j['number'] ?? 0) as int,
       nama: (j['nama'] ?? j['name'] ?? '') as String,
@@ -56,6 +58,7 @@ class Surah {
       jumlahAyat: (j['jumlahAyat'] ?? j['numberOfAyahs'] ?? 0) as int,
       juz: (j['juz'] ?? j['juzNumber'] ?? 0) as int,
       ayat: parsedAyat,
+      tempatTurun: (j['tempatTurun'] ?? j['revelationType'] ?? '') as String,
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hifzh_master/data/surah_data.dart';
 import 'package:hifzh_master/screens/uji/juz_test_screen.dart';
+import 'package:hifzh_master/services/gamification_service.dart';
 
 class SurahSelectionScreen extends StatefulWidget {
   const SurahSelectionScreen({super.key});
@@ -12,6 +13,24 @@ class SurahSelectionScreen extends StatefulWidget {
 class _SurahSelectionScreenState extends State<SurahSelectionScreen> {
   final TextEditingController _searchCtrl = TextEditingController();
   String _query = '';
+  Set<int> _unlockedSurahs = {1}; // Default Al-Fatihah
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUnlocked();
+  }
+
+  Future<void> _loadUnlocked() async {
+    final unlocked = await GamificationService.getUnlockedSurahs();
+    if (mounted) {
+      setState(() {
+        _unlockedSurahs = unlocked;
+        _loading = false;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -54,29 +73,37 @@ class _SurahSelectionScreenState extends State<SurahSelectionScreen> {
           )),
 
           // ── LIST SURAH ──
-          SliverPadding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 40),
-            sliver: SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) {
-                  final i = filtered[index];
-                  final nomor = i + 1;
-                  final ayat = i < SurahData.surahAyatCount.length ? SurahData.surahAyatCount[i] : 0;
-                  final type = i < SurahData.surahType.length ? SurahData.surahType[i] : '';
-                  return _SurahTile(
-                    nomor: nomor,
-                    nameLatin: surahs[i],
-                    nameArabic: surahsAr[i],
-                    arabicNum: arabicNums[i],
-                    ayatCount: ayat,
-                    type: type,
-                    onTap: () => _onSurahTap(nomor),
-                  );
-                },
-                childCount: filtered.length,
+          if (_loading)
+            const SliverFillRemaining(
+              child: Center(child: CircularProgressIndicator(color: Color(0xFFD4AF37))),
+            )
+          else
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 40),
+              sliver: SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) {
+                    final i = filtered[index];
+                    final nomor = i + 1;
+                    final ayat = i < SurahData.surahAyatCount.length ? SurahData.surahAyatCount[i] : 0;
+                    final type = i < SurahData.surahType.length ? SurahData.surahType[i] : '';
+                    final isLocked = !_unlockedSurahs.contains(nomor);
+
+                    return _SurahTile(
+                      nomor: nomor,
+                      nameLatin: surahs[i],
+                      nameArabic: surahsAr[i],
+                      arabicNum: arabicNums[i],
+                      ayatCount: ayat,
+                      type: type,
+                      isLocked: isLocked,
+                      onTap: isLocked ? null : () => _onSurahTap(nomor),
+                    );
+                  },
+                  childCount: filtered.length,
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
@@ -261,7 +288,8 @@ class _SurahTile extends StatelessWidget {
   final String arabicNum;
   final int ayatCount;
   final String type;
-  final VoidCallback onTap;
+  final bool isLocked;
+  final VoidCallback? onTap;
 
   const _SurahTile({
     required this.nomor,
@@ -270,7 +298,8 @@ class _SurahTile extends StatelessWidget {
     required this.arabicNum,
     required this.ayatCount,
     required this.type,
-    required this.onTap,
+    required this.isLocked,
+    this.onTap,
   });
 
   Color _accentColor(int n) {
@@ -284,114 +313,125 @@ class _SurahTile extends StatelessWidget {
 
     return GestureDetector(
       onTap: onTap,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 9),
-        padding: const EdgeInsets.fromLTRB(14, 12, 18, 12),
-        decoration: BoxDecoration(
-          color: const Color(0xFF122540),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: accent.withOpacity(0.2), width: 1),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.3),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            // Badge nomor Arab
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: accent.withOpacity(0.45), width: 1.5),
-                color: accent.withOpacity(0.08),
+      child: AnimatedOpacity(
+        duration: const Duration(milliseconds: 300),
+        opacity: isLocked ? 0.5 : 1.0,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 9),
+          padding: const EdgeInsets.fromLTRB(14, 12, 18, 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFF122540),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+                color: isLocked ? Colors.white10 : accent.withOpacity(0.2), 
+                width: 1),
+            boxShadow: [
+              if (!isLocked)
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.3),
+                  blurRadius: 8,
+                  offset: const Offset(0, 3),
+                ),
+            ],
+          ),
+          child: Row(
+            children: [
+              // Badge nomor Arab / Lock icon
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                      color: isLocked ? Colors.white24 : accent.withOpacity(0.45), 
+                      width: 1.5),
+                  color: isLocked ? Colors.white.withOpacity(0.05) : accent.withOpacity(0.08),
+                ),
+                child: Center(
+                  child: isLocked 
+                    ? const Icon(Icons.lock_rounded, color: Colors.white24, size: 18)
+                    : Text(arabicNum,
+                        style: TextStyle(
+                            color: accent,
+                            fontSize: arabicNum.length > 2 ? 11 : 14,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'Amiri')),
+                ),
               ),
-              child: Center(
-                child: Text(arabicNum,
-                    style: TextStyle(
-                        color: accent,
-                        fontSize: arabicNum.length > 2 ? 11 : 14,
-                        fontWeight: FontWeight.bold,
-                        fontFamily: 'Amiri')),
-              ),
-            ),
 
-            const SizedBox(width: 14),
+              const SizedBox(width: 14),
 
-            // Konten tengah: nama Arab + Latin
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.end, // kanan (Arab)
-                children: [
-                  // Nama Arab — besar & font Amiri
-                  Text(
-                    nameArabic,
-                    textDirection: TextDirection.rtl,
-                    style: const TextStyle(
-                      fontFamily: 'Amiri',
-                      fontSize: 22,
-                      color: Colors.white,
-                      height: 1.3,
+              // Konten tengah: nama Arab + Latin
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end, // kanan (Arab)
+                  children: [
+                    // Nama Arab — besar & font Amiri
+                    Text(
+                      nameArabic,
+                      textDirection: TextDirection.rtl,
+                      style: const TextStyle(
+                        fontFamily: 'Amiri',
+                        fontSize: 22,
+                        color: Colors.white,
+                        height: 1.3,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 2),
-                  // Nama Latin kecil
-                  Text(
-                    nameLatin,
-                    style: TextStyle(
-                        fontSize: 11.5,
-                        color: Colors.white.withOpacity(0.45)),
-                  ),
-                ],
+                    const SizedBox(height: 2),
+                    // Nama Latin kecil
+                    Text(
+                      nameLatin,
+                      style: TextStyle(
+                          fontSize: 11.5,
+                          color: Colors.white.withOpacity(0.45)),
+                    ),
+                  ],
+                ),
               ),
-            ),
 
-            const SizedBox(width: 12),
+              const SizedBox(width: 12),
 
-            // Info kanan: ayat + jenis + chevron
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: (isMakki
-                            ? const Color(0xFFD97706)
-                            : accent)
-                        .withOpacity(0.15),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
+              // Info kanan: ayat + jenis + chevron
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
                       color: (isMakki
                               ? const Color(0xFFD97706)
                               : accent)
-                          .withOpacity(0.4),
-                      width: 0.8,
+                          .withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: (isMakki
+                                ? const Color(0xFFD97706)
+                                : accent)
+                            .withOpacity(0.4),
+                        width: 0.8,
+                      ),
                     ),
+                    child: Text(type,
+                        style: TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w600,
+                            color: isMakki
+                                ? const Color(0xFFD97706)
+                                : accent)),
                   ),
-                  child: Text(type,
+                  const SizedBox(height: 5),
+                  Text('$ayatCount ayat',
                       style: TextStyle(
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w600,
-                          color: isMakki
-                              ? const Color(0xFFD97706)
-                              : accent)),
-                ),
-                const SizedBox(height: 5),
-                Text('$ayatCount ayat',
-                    style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.white.withOpacity(0.4))),
-                const SizedBox(height: 3),
-                Icon(Icons.chevron_right_rounded,
-                    color: Colors.white.withOpacity(0.25), size: 18),
-              ],
-            ),
-          ],
+                          fontSize: 11,
+                          color: Colors.white.withOpacity(0.4))),
+                  const SizedBox(height: 3),
+                  Icon(Icons.chevron_right_rounded,
+                      color: Colors.white.withOpacity(0.25), size: 18),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
